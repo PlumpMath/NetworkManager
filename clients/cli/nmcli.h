@@ -23,6 +23,8 @@
 #include "NetworkManager.h"
 #include "nm-secret-agent-old.h"
 
+#include "nm-meta-setting-desc.h"
+
 #if WITH_POLKIT_AGENT
 #include "nm-polkit-listener.h"
 #else
@@ -106,9 +108,32 @@ typedef enum {
 	NMC_OF_FLAG_MAIN_HEADER_ONLY   = 0x00000008,   /* Print main header only */
 } NmcOfFlags;
 
-struct _NMMetaSettingInfoEditor;
+extern const const NMMetaType nmc_meta_type_generic_info;
 
-typedef struct _NmcOutputField {
+typedef struct _NmcOutputField NmcOutputField;
+typedef struct _NmcMetaGenericInfo NmcMetaGenericInfo;
+
+struct _NmcMetaGenericInfo {
+	const NMMetaType *meta_type;
+	const char *name;
+	const NmcMetaGenericInfo *const*nested;
+};
+
+#define NMC_META_GENERIC_LEAF(n) \
+	(&((NmcMetaGenericInfo) { \
+		.meta_type =                        &nmc_meta_type_generic_info, \
+		.name =                             N_ (n), \
+	}))
+
+#define NMC_META_GENERIC_WITH_NESTED(n, nest) \
+	(&((NmcMetaGenericInfo) { \
+		.meta_type =                        &nmc_meta_type_generic_info, \
+		.name =                             N_ (n), \
+		.nested =                           (nest), \
+	}))
+
+struct _NmcOutputField {
+	const NMMetaAbstractInfo *info;
 	const char *name;               /* Field's name */
 	int width;                      /* Width in screen columns */
 	const struct _NmcOutputField *group_list; /* Points to an array with available section field names if this is a section (group) field */
@@ -126,7 +151,7 @@ typedef struct _NmcOutputField {
 	 * For now, hack around that by alternatively providing a @setting_info instead
 	 * of @group_list. */
 	const struct _NMMetaSettingInfoEditor *setting_info;
-} NmcOutputField;
+};
 
 typedef enum {
 	NMC_USE_COLOR_AUTO,

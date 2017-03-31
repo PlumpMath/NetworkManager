@@ -6580,7 +6580,7 @@ static const NMMetaPropertyInfo property_infos_WIRELESS_SECURITY[] = {
 	},
 };
 
-const NMMetaSettingInfoEditor nm_meta_setting_infos_editor[_NM_META_SETTING_TYPE_NUM] = {
+const NMMetaSettingInfoEditor nm_meta_setting_infos_editor[] = {
 #define SETTING_INFO(type) \
 	[NM_META_SETTING_TYPE_##type] = { \
 		.meta_type =                        &nm_meta_type_setting_info_editor, \
@@ -6621,6 +6621,44 @@ const NMMetaSettingInfoEditor nm_meta_setting_infos_editor[_NM_META_SETTING_TYPE
 	SETTING_INFO (WIRED),
 	SETTING_INFO (WIRELESS),
 	SETTING_INFO (WIRELESS_SECURITY),
+};
+
+const NMMetaSettingInfoEditor *const nm_meta_setting_infos_editor_p[] = {
+#define SETTING_INFO_P(type) \
+	[NM_META_SETTING_TYPE_##type] = &nm_meta_setting_infos_editor[NM_META_SETTING_TYPE_##type]
+	SETTING_INFO_P (802_1X),
+	SETTING_INFO_P (ADSL),
+	SETTING_INFO_P (BLUETOOTH),
+	SETTING_INFO_P (BOND),
+	SETTING_INFO_P (BRIDGE),
+	SETTING_INFO_P (BRIDGE_PORT),
+	SETTING_INFO_P (CDMA),
+	SETTING_INFO_P (CONNECTION),
+	SETTING_INFO_P (DCB),
+	SETTING_INFO_P (DUMMY),
+	SETTING_INFO_P (GSM),
+	SETTING_INFO_P (INFINIBAND),
+	SETTING_INFO_P (IP4_CONFIG),
+	SETTING_INFO_P (IP6_CONFIG),
+	SETTING_INFO_P (IP_TUNNEL),
+	SETTING_INFO_P (MACSEC),
+	SETTING_INFO_P (MACVLAN),
+	SETTING_INFO_P (OLPC_MESH),
+	SETTING_INFO_P (PPPOE),
+	SETTING_INFO_P (PPP),
+	SETTING_INFO_P (PROXY),
+	SETTING_INFO_P (SERIAL),
+	SETTING_INFO_P (TEAM),
+	SETTING_INFO_P (TEAM_PORT),
+	SETTING_INFO_P (TUN),
+	SETTING_INFO_P (USER),
+	SETTING_INFO_P (VLAN),
+	SETTING_INFO_P (VPN),
+	SETTING_INFO_P (VXLAN),
+	SETTING_INFO_P (WIMAX),
+	SETTING_INFO_P (WIRED),
+	SETTING_INFO_P (WIRELESS),
+	SETTING_INFO_P (WIRELESS_SECURITY),
 };
 
 const NMMetaType nm_meta_type_setting_info_editor = {

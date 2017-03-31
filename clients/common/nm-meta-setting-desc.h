@@ -153,7 +153,9 @@ struct _NMMetaAbstractInfo {
 extern const NMMetaType nm_meta_type_setting_info_editor;
 extern const NMMetaType nm_meta_type_property_info;
 
-extern const NMMetaSettingInfoEditor nm_meta_setting_infos_editor[_NM_META_SETTING_TYPE_NUM];
+extern const NMMetaSettingInfoEditor nm_meta_setting_infos_editor[_NM_META_SETTING_TYPE_NUM + 1];
+
+extern const NMMetaSettingInfoEditor *const nm_meta_setting_infos_editor_p[_NM_META_SETTING_TYPE_NUM + 1];
 
 /*****************************************************************************/
 

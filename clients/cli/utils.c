@@ -624,6 +624,134 @@ nmc_free_output_field_values (NmcOutputField fields_array[])
  *   Caller is responsible for freeing the array.
  */
 GArray *
+Parse_output_fields (const char *fields_str,
+                     const NMMetaAbstractInfo *const* fields_array,
+                     gboolean parse_groups,
+                     GPtrArray **group_fields,
+                     GError **error)
+{
+	char **fields, **iter;
+	GArray *array;
+	int i, j;
+
+	g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+	g_return_val_if_fail (group_fields == NULL || *group_fields == NULL, NULL);
+
+	array = g_array_new (FALSE, FALSE, sizeof (int));
+	if (parse_groups && group_fields)
+		*group_fields = g_ptr_array_new_full (20, (GDestroyNotify) g_free);
+
+	/* Split supplied fields string */
+	fields = g_strsplit_set (fields_str, ",", -1);
+	for (iter = fields; iter && *iter; iter++) {
+		int idx = -1;
+
+		g_strstrip (*iter);
+		if (parse_groups) {
+			/* e.g. "general.device,general.driver,ip4,ip6" */
+			gboolean found = FALSE;
+			char *left = *iter;
+			char *right = strchr (*iter, '.');
+
+			if (right)
+				*right++ = '\0';
+
+			for (i = 0; fields_array[i].name; i++) {
+				if (strcasecmp (left, fields_array[i].name) == 0) {
+					const NmcOutputField *valid_names = fields_array[i].group_list;
+					const NMMetaSettingInfoEditor *setting_info = fields_array[i].setting_info;
+
+					idx = i;
+					if (!right && !valid_names && !setting_info) {
+						found = TRUE;
+						break;
+					}
+					if (valid_names) {
+						for (j = 0; valid_names[j].name; j++) {
+							if (!right || strcasecmp (right, valid_names[j].name) == 0) {
+								found = TRUE;
+								break;
+							}
+						}
+					} else if (setting_info) {
+						for (j = 1; j < setting_info->properties_num; j++) {
+							if (!right || strcasecmp (right, setting_info->properties[j].property_name) == 0) {
+								found = TRUE;
+								break;
+							}
+						}
+					}
+					if (found)
+						break;
+				}
+			}
+			if (found) {
+				/* Add index to array, and field name (or NULL) to group_fields array */
+				g_array_append_val (array, idx);
+				if (group_fields && *group_fields)
+					g_ptr_array_add (*group_fields, g_strdup (right));
+			}
+			if (right)
+				*(right-1) = '.';  /* Restore the original string */
+		} else {
+			/* e.g. "general,ip4,ip6" */
+			for (i = 0; fields_array[i].name; i++) {
+				if (strcasecmp (*iter, fields_array[i].name) == 0) {
+					g_array_append_val (array, i);
+					break;
+				}
+			}
+		}
+
+		/* Field was not found - error case */
+		if (fields_array[i].name == NULL) {
+			/* Set GError */
+			if (!strcasecmp (*iter, "all") || !strcasecmp (*iter, "common"))
+				g_set_error (error, NMCLI_ERROR, 0, _("field '%s' has to be alone"), *iter);
+			else {
+				char *allowed_fields = nmc_get_allowed_fields (fields_array, idx);
+				g_set_error (error, NMCLI_ERROR, 1, _("invalid field '%s'; allowed fields: %s"),
+				             *iter, allowed_fields);
+				g_free (allowed_fields);
+			}
+
+			/* Free arrays on error */
+			g_array_free (array, TRUE);
+			array = NULL;
+			if (group_fields && *group_fields) {
+				g_ptr_array_free (*group_fields, TRUE);
+				*group_fields = NULL;
+			}
+			goto done;
+		}
+	}
+done:
+	if (fields)
+		g_strfreev (fields);
+	return array;
+}
+
+/**
+ * parse_output_fields:
+ * @field_str: comma-separated field names to parse
+ * @fields_array: array of allowed fields
+ * @parse_groups: whether the fields can contain group prefix (e.g. general.driver)
+ * @group_fields: (out) (allow-none): array of field names for particular groups
+ * @error: (out) (allow-none): location to store error, or %NULL
+ *
+ * Parses comma separated fields in @fields_str according to @fields_array.
+ * When @parse_groups is %TRUE, fields can be in the form 'group.field'. Then
+ * @group_fields will be filled with the required field for particular group.
+ * @group_fields array corresponds to the returned array.
+ * Examples:
+ *   @field_str:     "type,name,uuid" | "ip4,general.device" | "ip4.address,ip6"
+ *   returned array:   2    0    1    |   7         0        |     7         9
+ *   @group_fields:   NULL NULL NULL  |  NULL    "device"    | "address"    NULL
+ *
+ * Returns: #GArray with indices representing fields in @fields_array.
+ *   Caller is responsible for freeing the array.
+ */
+GArray *
 parse_output_fields (const char *fields_str,
                      const NmcOutputField fields_array[],
                      gboolean parse_groups,
@@ -741,6 +869,44 @@ done:
 *   Caller is responsible for freeing the array.
 */
 char *
+Nmc_get_allowed_fields (const NMMetaAbstractInfo *const*fields_array, int group_idx)
+{
+	GString *allowed_fields = g_string_sized_new (256);
+	int i;
+
+	if (group_idx != -1 && fields_array[group_idx].group_list) {
+		const NmcOutputField *second_level = fields_array[group_idx].group_list;
+
+		for (i = 0; second_level[i].name; i++) {
+			g_string_append_printf (allowed_fields, "%s.%s,",
+			                        fields_array[group_idx].name, second_level[i].name);
+		}
+	} else if (group_idx != -1 && fields_array[group_idx].setting_info) {
+		const NMMetaSettingInfoEditor *second_level = fields_array[group_idx].setting_info;
+
+		for (i = 1; i < second_level->properties_num; i++) {
+			g_string_append_printf (allowed_fields, "%s.%s,",
+			                        fields_array[group_idx].name, second_level->properties[i].property_name);
+		}
+	} else {
+		for (i = 0; fields_array[i].name; i++)
+			g_string_append_printf (allowed_fields, "%s,", fields_array[i].name);
+	}
+	g_string_truncate (allowed_fields, allowed_fields->len - 1);
+
+	return g_string_free (allowed_fields, FALSE);
+}
+
+/**
+* nmc_get_allowed_fields:
+* @fields_array: array of fields
+* @group_idx: index to the array (for second-level array in 'group' member),
+*   or -1
+*
+* Returns: string of allowed fields names.
+*   Caller is responsible for freeing the array.
+*/
+char *
 nmc_get_allowed_fields (const NmcOutputField fields_array[], int group_idx)
 {
 	GString *allowed_fields = g_string_sized_new (256);
@@ -767,6 +933,22 @@ nmc_get_allowed_fields (const NmcOutputField fields_array[], int group_idx)
 	g_string_truncate (allowed_fields, allowed_fields->len - 1);
 
 	return g_string_free (allowed_fields, FALSE);
+}
+
+NmcOutputField *
+Nmc_dup_fields_array (const NMMetaAbstractInfo *const*fields, NmcOfFlags flags)
+{
+	NmcOutputField *row;
+	gsize l;
+
+	for (l = 0; fields[l]; l++) {
+	}
+
+	row = g_malloc0 ((l + 1) * sizeof (NmcOutputField));
+	for (l = 0; fields[l]; l++)
+		row[l].info = fields[l];
+	row[0].flags = flags;
+	return row;
 }
 
 NmcOutputField *
